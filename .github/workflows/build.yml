@@ -25,7 +25,7 @@ jobs:
             packages: ""
             runner_prefix: ""
           - target: linuxarm64
-            packages: gcc-aarch64-linux-gnu qemu-user-static
+            packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
             runner_prefix: qemu-aarch64-static
           - target: win64
             packages: gcc-mingw-w64-x86-64 zip wine

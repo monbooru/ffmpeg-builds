@@ -66,7 +66,8 @@ cd "$WORK/libwebp-$LIBWEBP_VERSION"
   --disable-shared --enable-static --enable-libwebpmux \
   --disable-gl --disable-sdl --disable-png --disable-jpeg \
   --disable-tiff --disable-gif --disable-wic \
-  CC="${CROSS}gcc" >/dev/null
+  CC="${CROSS}gcc" > "$WORK/libwebp-configure.log" 2>&1 \
+  || { tail -40 "$WORK/libwebp-configure.log" >&2; exit 1; }
 make -j"$JOBS" >/dev/null
 make install >/dev/null
 
@@ -76,7 +77,8 @@ DAV1D_OPTS="--default-library=static --prefix=$PREFIX --libdir=lib \
 [ "$ASM_OK" = 1 ] || DAV1D_OPTS="$DAV1D_OPTS -Denable_asm=false"
 [ -z "$CROSS" ] || DAV1D_OPTS="$DAV1D_OPTS --cross-file=$ROOT/cross/$TARGET.meson"
 # shellcheck disable=SC2086
-meson setup "$WORK/dav1d-build" "$WORK/dav1d-$DAV1D_VERSION" $DAV1D_OPTS >/dev/null
+meson setup "$WORK/dav1d-build" "$WORK/dav1d-$DAV1D_VERSION" $DAV1D_OPTS > "$WORK/dav1d-configure.log" 2>&1 \
+  || { tail -40 "$WORK/dav1d-configure.log" >&2; exit 1; }
 ninja -C "$WORK/dav1d-build" >/dev/null
 ninja -C "$WORK/dav1d-build" install >/dev/null
 
@@ -86,8 +88,10 @@ FF_OPTS=""
 [ "$ASM_OK" = 1 ] || FF_OPTS="--disable-x86asm"
 [ -z "$CROSS" ] || FF_OPTS="$FF_OPTS --enable-cross-compile --cross-prefix=$CROSS"
 # shellcheck disable=SC2086
+# --cross-prefix would otherwise make configure demand a <prefix>pkg-config.
 env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --arch="$FF_ARCH" --target-os="$FF_OS" $FF_OPTS \
+  --pkg-config=pkg-config \
   --pkg-config-flags=--static \
   --extra-cflags="-I$PREFIX/include" \
   --extra-ldflags="-L$PREFIX/lib -static" \
@@ -106,7 +110,8 @@ env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --enable-encoder=mjpeg,libwebp,libwebp_anim \
   --enable-muxer=image2,webp \
   --enable-filter=scale \
-  --enable-libwebp --enable-libdav1d >/dev/null
+  --enable-libwebp --enable-libdav1d > "$WORK/ffmpeg-configure.log" 2>&1 \
+  || { tail -40 "$WORK/ffmpeg-configure.log" >&2; exit 1; }
 make -j"$JOBS" >/dev/null
 
 PKG="ffmpeg-$FFMPEG_VERSION-mb$MB_REV-$TARGET"
