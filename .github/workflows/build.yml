@@ -1,0 +1,76 @@
+name: Build
+
+# Builds the trimmed ffmpeg + ffprobe pair for the three targets the
+# monbooru bundles carry, runs the smoke suite against each (natively,
+# under qemu, under wine), and attaches the archives to a release on
+# tag push. Tags are v<ffmpeg version>-mb<rev>, matching versions.sh.
+
+on:
+  push:
+    tags:
+      - 'v*-mb*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux64
+            packages: ""
+            runner_prefix: ""
+          - target: linuxarm64
+            packages: gcc-aarch64-linux-gnu qemu-user-static
+            runner_prefix: qemu-aarch64-static
+          - target: win64
+            packages: gcc-mingw-w64-x86-64 zip wine
+            runner_prefix: wine
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install the build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            nasm meson ninja-build ffmpeg libjpeg-turbo-progs \
+            ${{ matrix.packages }}
+
+      - name: Build
+        run: ./build.sh ${{ matrix.target }}
+
+      - name: Smoke
+        env:
+          RUNNER: ${{ matrix.runner_prefix }}
+        run: ./smoke/smoke.sh work/${{ matrix.target }}/*-${{ matrix.target }}/bin
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    steps:
+      - name: Download every artifact
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: ffmpeg-*
+          merge-multiple: true
+
+      - name: Create the release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: dist/*
