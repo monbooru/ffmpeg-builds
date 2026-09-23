@@ -39,10 +39,10 @@ is_webp() { head -c 16 "$1" | grep -q WEBP; }
 anim_frames() { grep -aoc ANMF "$1" || true; }
 
 probe_duration() {
-  $RUNNER "$FP" -v quiet -print_format csv=p=0 -show_entries format=duration -- "$1"
+  $RUNNER "$FP" -v quiet -print_format csv=p=0 -show_entries format=duration -- "$1" | tr -d '\r'
 }
 probe_dims() {
-  $RUNNER "$FP" -v quiet -select_streams v:0 -show_entries stream=width,height -print_format csv=p=0:s=x -- "$1"
+  $RUNNER "$FP" -v quiet -select_streams v:0 -show_entries stream=width,height -print_format csv=p=0:s=x -- "$1" | tr -d '\r'
 }
 
 dims_ok() {
