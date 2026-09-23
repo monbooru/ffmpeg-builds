@@ -5,9 +5,11 @@ Trimmed static builds of ffmpeg and ffprobe for the
 
 ## What is inside
 
-- Demuxers: mov (mp4), matroska (webm), gif, image2, jpeg pipe
-- Decoders: h264, hevc, vp8, vp9, mpeg4, mjpeg, gif, and AV1 via
-  [dav1d](https://code.videolan.org/videolan/dav1d)
+- Demuxers: mov (mp4, avif), matroska (webm), gif, image2, jpeg pipe,
+  jpegxl pipe
+- Decoders: h264, hevc, vp8, vp9, mpeg4, mjpeg, gif, AV1 via
+  [dav1d](https://code.videolan.org/videolan/dav1d), and JPEG XL via
+  [libjxl](https://github.com/libjxl/libjxl)
 - Encoders: mjpeg and animated WebP via
   [libwebp](https://chromium.googlesource.com/webm/libwebp)
 - Muxers: image2, webp
@@ -42,7 +44,8 @@ bumps for a rebuild of the same ffmpeg (a library bump, a flag fix).
 
 The build scripts in this repository are MIT. The binaries they
 produce are LGPL-2.1-or-later ffmpeg builds (no `--enable-gpl`
-components) statically linked with libwebp (BSD-3-Clause) and dav1d
-(BSD-2-Clause); each archive ships the corresponding licence texts
-under `licenses/`. The exact source versions and checksums are pinned
-in `versions.sh`.
+components) statically linked with libwebp (BSD-3-Clause), dav1d
+(BSD-2-Clause) and libjxl (BSD-3-Clause), with libjxl's highway
+(BSD-3-Clause), brotli (MIT) and skcms (BSD-3-Clause); each archive
+ships the corresponding licence texts under `licenses/`. The exact
+source versions and checksums are pinned in `versions.sh`.

@@ -42,12 +42,29 @@ fetch "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/li
       "libwebp-$LIBWEBP_VERSION.tar.gz" "$LIBWEBP_SHA256"
 fetch "https://downloads.videolan.org/pub/videolan/dav1d/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.xz" \
       "dav1d-$DAV1D_VERSION.tar.xz" "$DAV1D_SHA256"
+fetch "https://github.com/libjxl/libjxl/archive/refs/tags/v$LIBJXL_VERSION.tar.gz" \
+      "libjxl-$LIBJXL_VERSION.tar.gz" "$LIBJXL_SHA256"
+fetch "https://github.com/google/highway/archive/refs/tags/$HWY_VERSION.tar.gz" \
+      "highway-$HWY_VERSION.tar.gz" "$HWY_SHA256"
+fetch "https://github.com/google/brotli/archive/refs/tags/v$BROTLI_VERSION.tar.gz" \
+      "brotli-$BROTLI_VERSION.tar.gz" "$BROTLI_SHA256"
+fetch "https://github.com/google/skcms/archive/$SKCMS_COMMIT.tar.gz" \
+      "skcms-$SKCMS_COMMIT.tar.gz" "$SKCMS_SHA256"
 
 rm -rf "$WORK/libwebp-$LIBWEBP_VERSION" "$WORK/dav1d-$DAV1D_VERSION" \
+       "$WORK/libjxl-$LIBJXL_VERSION" "$WORK/highway-$HWY_VERSION" \
+       "$WORK/brotli-$BROTLI_VERSION" "$WORK/skcms-$SKCMS_COMMIT" \
        "$WORK/ffmpeg-$FFMPEG_VERSION" "$PREFIX"
 tar -xzf "$SOURCES/libwebp-$LIBWEBP_VERSION.tar.gz" -C "$WORK"
 tar -xJf "$SOURCES/dav1d-$DAV1D_VERSION.tar.xz" -C "$WORK"
+tar -xzf "$SOURCES/libjxl-$LIBJXL_VERSION.tar.gz" -C "$WORK"
+tar -xzf "$SOURCES/highway-$HWY_VERSION.tar.gz" -C "$WORK"
+tar -xzf "$SOURCES/brotli-$BROTLI_VERSION.tar.gz" -C "$WORK"
+tar -xzf "$SOURCES/skcms-$SKCMS_COMMIT.tar.gz" -C "$WORK"
 tar -xJf "$SOURCES/ffmpeg-$FFMPEG_VERSION.tar.xz" -C "$WORK"
+
+rmdir "$WORK/libjxl-$LIBJXL_VERSION/third_party/skcms"
+mv "$WORK/skcms-$SKCMS_COMMIT" "$WORK/libjxl-$LIBJXL_VERSION/third_party/skcms"
 
 ASM_OK=1
 if [ "$FF_ARCH" = x86_64 ] && ! command -v nasm >/dev/null && ! command -v yasm >/dev/null; then
@@ -82,6 +99,28 @@ meson setup "$WORK/dav1d-build" "$WORK/dav1d-$DAV1D_VERSION" $DAV1D_OPTS > "$WOR
 ninja -C "$WORK/dav1d-build" >/dev/null
 ninja -C "$WORK/dav1d-build" install >/dev/null
 
+cmake_build() {
+  name=$1; src=$2; shift 2
+  echo "=== $name ($TARGET)"
+  env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" cmake -S "$src" -B "$WORK/$name-build" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_PREFIX_PATH="$PREFIX" -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
+    ${CROSS:+"-DCMAKE_TOOLCHAIN_FILE=$ROOT/cross/$TARGET.cmake"} "$@" > "$WORK/$name-configure.log" 2>&1 \
+    || { tail -40 "$WORK/$name-configure.log" >&2; exit 1; }
+  cmake --build "$WORK/$name-build" -j "$JOBS" >/dev/null
+  cmake --install "$WORK/$name-build" >/dev/null
+}
+
+cmake_build brotli "$WORK/brotli-$BROTLI_VERSION" -DBROTLI_BUILD_TOOLS=OFF
+cmake_build highway "$WORK/highway-$HWY_VERSION" \
+  -DHWY_ENABLE_CONTRIB=OFF -DHWY_ENABLE_EXAMPLES=OFF -DHWY_ENABLE_TESTS=OFF
+cmake_build libjxl "$WORK/libjxl-$LIBJXL_VERSION" \
+  -DJPEGXL_FORCE_SYSTEM_BROTLI=ON -DJPEGXL_FORCE_SYSTEM_HWY=ON -DJPEGXL_ENABLE_SKCMS=ON \
+  -DJPEGXL_ENABLE_TOOLS=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF \
+  -DJPEGXL_ENABLE_BENCHMARK=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_JNI=OFF \
+  -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_TCMALLOC=OFF \
+  -DJPEGXL_BUNDLE_LIBPNG=OFF
+
 echo "=== ffmpeg ($TARGET)"
 cd "$WORK/ffmpeg-$FFMPEG_VERSION"
 FF_OPTS=""
@@ -95,6 +134,7 @@ env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --pkg-config-flags=--static \
   --extra-cflags="-I$PREFIX/include" \
   --extra-ldflags="-L$PREFIX/lib -static" \
+  --extra-libs="-lstdc++ -lm" \
   --disable-everything \
   --disable-autodetect \
   --disable-network \
@@ -104,13 +144,13 @@ env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --disable-ffplay \
   --enable-ffmpeg --enable-ffprobe \
   --enable-protocol=file \
-  --enable-demuxer=mov,matroska,gif,image2,image_jpeg_pipe \
-  --enable-decoder=h264,hevc,vp8,vp9,mpeg4,mjpeg,gif,libdav1d \
-  --enable-parser=h264,hevc,vp8,vp9,av1,mjpeg,gif \
+  --enable-demuxer=mov,matroska,gif,image2,image_jpeg_pipe,image_jpegxl_pipe \
+  --enable-decoder=h264,hevc,vp8,vp9,mpeg4,mjpeg,gif,libdav1d,libjxl \
+  --enable-parser=h264,hevc,vp8,vp9,av1,mjpeg,gif,jpegxl \
   --enable-encoder=mjpeg,libwebp,libwebp_anim \
   --enable-muxer=image2,webp \
   --enable-filter=scale \
-  --enable-libwebp --enable-libdav1d > "$WORK/ffmpeg-configure.log" 2>&1 \
+  --enable-libwebp --enable-libdav1d --enable-libjxl > "$WORK/ffmpeg-configure.log" 2>&1 \
   || { tail -40 "$WORK/ffmpeg-configure.log" >&2; exit 1; }
 make -j"$JOBS" >/dev/null
 
@@ -123,6 +163,10 @@ cp "ffmpeg$EXE" "ffprobe$EXE" "$STAGE/bin/"
 cp LICENSE.md COPYING.LGPLv2.1 "$STAGE/licenses/"
 cp "$WORK/libwebp-$LIBWEBP_VERSION/COPYING" "$STAGE/licenses/COPYING.libwebp"
 cp "$WORK/dav1d-$DAV1D_VERSION/COPYING" "$STAGE/licenses/COPYING.dav1d"
+cp "$WORK/libjxl-$LIBJXL_VERSION/LICENSE" "$STAGE/licenses/COPYING.libjxl"
+cp "$WORK/libjxl-$LIBJXL_VERSION/third_party/skcms/LICENSE" "$STAGE/licenses/COPYING.skcms"
+cp "$WORK/highway-$HWY_VERSION/LICENSE-BSD3" "$STAGE/licenses/COPYING.highway"
+cp "$WORK/brotli-$BROTLI_VERSION/LICENSE" "$STAGE/licenses/COPYING.brotli"
 
 cd "$WORK"
 if [ "$TARGET" = win64 ]; then

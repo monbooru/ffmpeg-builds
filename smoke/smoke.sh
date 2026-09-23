@@ -45,7 +45,13 @@ probe_dims() {
   $RUNNER "$FP" -v quiet -select_streams v:0 -show_entries stream=width,height -print_format csv=p=0:s=x -- "$1"
 }
 
-for v in h264.mp4 hevc.mp4 mpeg4.mp4 av1.mp4 vp8.webm vp9.webm av1.webm; do
+dims_ok() {
+  w=${1%%x*}; rest=${1#*x}; h=${rest%%x*}
+  case "$w" in ''|0|*[!0-9]*) return 1;; esac
+  case "$h" in ''|0|*[!0-9]*) return 1;; esac
+}
+
+for v in h264.mp4 hevc.mp4 mpeg4.mp4 av1.mp4 vp8.webm vp9.webm av1.webm rot.mp4; do
   src="$CORPUS/$v"
   [ -f "$src" ] || { echo "skip: $v not in corpus" >&2; continue; }
   echo "--- $v"
@@ -54,7 +60,7 @@ for v in h264.mp4 hevc.mp4 mpeg4.mp4 av1.mp4 vp8.webm vp9.webm av1.webm; do
   case "$d" in ''|0*[!.0-9]*) bad "$v: duration probe returned '$d'";; esac
 
   dims=$(probe_dims "$src")
-  case "$dims" in *x*) ;; *) bad "$v: dimension probe returned '$dims'";; esac
+  dims_ok "$dims" || bad "$v: dimension probe returned '$dims'"
 
   # generateVideoThumb
   $RUNNER "$FF" -y -loglevel error -ss 0.1 -i "$src" -frames:v 1 -vf scale=300:-1 -q:v 2 -- "$TMP/$v.thumb.jpg" \
@@ -95,6 +101,40 @@ $RUNNER "$FF" -y -loglevel error -i "$src" -vf scale=300:-1 -loop 0 -- "$TMP/gif
 is_webp "$TMP/gif.hover.webp" || bad "gif: hover is not WebP"
 [ "$(anim_frames "$TMP/gif.hover.webp")" -ge 2 ] || bad "gif: hover is not animated"
 
+render_still() {
+  if [ "$3" -gt 0 ]; then
+    $RUNNER "$FF" -y -loglevel error -i "$1" -update 1 -frames:v 1 \
+      -vf "scale='min($3,iw)':'min($3,ih)':force_original_aspect_ratio=decrease" -q:v 2 -- "$2"
+  else
+    $RUNNER "$FF" -y -loglevel error -i "$1" -update 1 -frames:v 1 -q:v 2 -- "$2"
+  fi
+}
+
+for s in still.avif alpha.avif rot.avif still.jxl container.jxl recompressed.jxl; do
+  src="$CORPUS/$s"
+  [ -f "$src" ] || { echo "skip: $s not in corpus" >&2; continue; }
+  echo "--- $s"
+
+  dims=$(probe_dims "$src")
+  dims_ok "$dims" || bad "$s: dimension probe returned '$dims'"
+
+  for max in 300 4000 0; do
+    render_still "$src" "$TMP/$s.$max.jpg" "$max" || bad "$s: render at $max"
+    is_jpeg "$TMP/$s.$max.jpg" || bad "$s: render at $max is not a JPEG"
+  done
+
+  if command -v "$GO" >/dev/null; then
+    "$GO" run "$HERE/decodecheck.go" -similar "$TMP/$s.300.jpg" "$TMP/$s.0.jpg" \
+      || bad "$s: thumbnail does not resemble the full image"
+  fi
+done
+
+# The 640x360 source comes out portrait once irot is applied.
+if command -v "$GO" >/dev/null && [ -f "$TMP/rot.avif.0.jpg" ]; then
+  "$GO" run "$HERE/decodecheck.go" "$TMP/rot.avif.0.jpg" | grep -q '^jpeg 360x640$' \
+    || bad "rot.avif: irot not applied"
+fi
+
 echo "--- normalize"
 if command -v "$GO" >/dev/null; then
   if [ -f "$CORPUS/weird.jpg" ]; then
@@ -121,8 +161,8 @@ for p in http https tcp tls udp; do
   echo "$protos" | grep -qw "$p" && bad "network protocol '$p' compiled in"
 done
 
-ndec=$($RUNNER "$FF" -hide_banner -decoders 2>/dev/null | grep -c '^ [AVS]') || true
-[ "$ndec" -le 12 ] || bad "decoder count $ndec exceeds budget (accidental fat build?)"
+ndec=$($RUNNER "$FF" -hide_banner -decoders 2>/dev/null | grep -c '^ [AVS][A-Z.]\{5\} [^=]') || true
+[ "$ndec" -le 10 ] || bad "decoder count $ndec exceeds budget (accidental fat build?)"
 
 for b in "$FF" "$FP"; do
   sz=$(wc -c < "$b")

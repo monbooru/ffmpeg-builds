@@ -25,10 +25,10 @@ jobs:
             packages: ""
             runner_prefix: ""
           - target: linuxarm64
-            packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
+            packages: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
             runner_prefix: qemu-aarch64-static
           - target: win64
-            packages: gcc-mingw-w64-x86-64 zip wine
+            packages: gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 zip wine
             runner_prefix: wine
     steps:
       - name: Checkout
@@ -38,7 +38,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            nasm meson ninja-build ffmpeg libjpeg-turbo-progs \
+            nasm meson ninja-build cmake g++ ffmpeg libjpeg-turbo-progs \
+            libavif-bin libjxl-tools \
             ${{ matrix.packages }}
 
       - name: Build
