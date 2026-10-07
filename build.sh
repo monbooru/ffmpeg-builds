@@ -128,6 +128,7 @@ FF_OPTS=""
 [ -z "$CROSS" ] || FF_OPTS="$FF_OPTS --enable-cross-compile --cross-prefix=$CROSS"
 # shellcheck disable=SC2086
 # --cross-prefix would otherwise make configure demand a <prefix>pkg-config.
+# --disable-everything leaves the iamf subsystem, and with it mov's IAMF parser, on.
 env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --arch="$FF_ARCH" --target-os="$FF_OS" $FF_OPTS \
   --pkg-config=pkg-config \
@@ -142,6 +143,7 @@ env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --disable-debug \
   --disable-avdevice \
   --disable-ffplay \
+  --disable-iamf \
   --enable-ffmpeg --enable-ffprobe \
   --enable-protocol=file \
   --enable-demuxer=mov,matroska,gif,image2,image_jpeg_pipe,image_jpegxl_pipe \
@@ -165,7 +167,7 @@ cp "$WORK/libwebp-$LIBWEBP_VERSION/COPYING" "$STAGE/licenses/COPYING.libwebp"
 cp "$WORK/dav1d-$DAV1D_VERSION/COPYING" "$STAGE/licenses/COPYING.dav1d"
 cp "$WORK/libjxl-$LIBJXL_VERSION/LICENSE" "$STAGE/licenses/COPYING.libjxl"
 cp "$WORK/libjxl-$LIBJXL_VERSION/third_party/skcms/LICENSE" "$STAGE/licenses/COPYING.skcms"
-cp "$WORK/highway-$HWY_VERSION/LICENSE-BSD3" "$STAGE/licenses/COPYING.highway"
+cp "$WORK/highway-$HWY_VERSION/LICENSE" "$STAGE/licenses/COPYING.highway"
 cp "$WORK/brotli-$BROTLI_VERSION/LICENSE" "$STAGE/licenses/COPYING.brotli"
 
 cd "$WORK"
