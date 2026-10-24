@@ -26,6 +26,7 @@ gen av1.mp4   -c:v libaom-av1 -cpu-used 8 -usage realtime -pix_fmt yuv420p
 gen vp8.webm  -c:v libvpx -pix_fmt yuv420p
 gen vp9.webm  -c:v libvpx-vp9 -pix_fmt yuv420p
 gen av1.webm  -c:v libaom-av1 -cpu-used 8 -usage realtime -pix_fmt yuv420p
+gen sound.mp4 -f lavfi -i sine=duration=1 -c:v libx264 -pix_fmt yuv420p -c:a aac
 gen anim.gif
 gen plain.jpg -frames:v 1 -update 1
 

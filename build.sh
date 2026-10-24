@@ -121,48 +121,58 @@ cmake_build libjxl "$WORK/libjxl-$LIBJXL_VERSION" \
   -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_TCMALLOC=OFF \
   -DJPEGXL_BUNDLE_LIBPNG=OFF
 
-echo "=== ffmpeg ($TARGET)"
-cd "$WORK/ffmpeg-$FFMPEG_VERSION"
 FF_OPTS=""
 [ "$ASM_OK" = 1 ] || FF_OPTS="--disable-x86asm"
 [ -z "$CROSS" ] || FF_OPTS="$FF_OPTS --enable-cross-compile --cross-prefix=$CROSS"
-# shellcheck disable=SC2086
-# --cross-prefix would otherwise make configure demand a <prefix>pkg-config.
-# --disable-everything leaves the iamf subsystem, and with it mov's IAMF parser, on.
-env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
-  --arch="$FF_ARCH" --target-os="$FF_OS" $FF_OPTS \
-  --pkg-config=pkg-config \
-  --pkg-config-flags=--static \
-  --extra-cflags="-I$PREFIX/include" \
-  --extra-ldflags="-L$PREFIX/lib -static" \
-  --extra-libs="-lstdc++ -lm" \
-  --disable-everything \
-  --disable-autodetect \
-  --disable-network \
-  --disable-doc \
-  --disable-debug \
-  --disable-avdevice \
-  --disable-ffplay \
-  --disable-iamf \
-  --enable-ffmpeg --enable-ffprobe \
-  --enable-protocol=file \
-  --enable-demuxer=mov,matroska,gif,image2,image_jpeg_pipe,image_jpegxl_pipe \
+
+ffmpeg_build() {
+  name=$1; shift
+  echo "=== $name ($TARGET)"
+  rm -rf "$WORK/$name-build"
+  mkdir -p "$WORK/$name-build"
+  cd "$WORK/$name-build"
+  # shellcheck disable=SC2086
+  # --cross-prefix would otherwise make configure demand a <prefix>pkg-config.
+  # --disable-everything leaves the iamf subsystem, and with it mov's IAMF parser, on.
+  env PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" "$WORK/ffmpeg-$FFMPEG_VERSION/configure" \
+    --arch="$FF_ARCH" --target-os="$FF_OS" $FF_OPTS \
+    --pkg-config=pkg-config \
+    --pkg-config-flags=--static \
+    --extra-cflags="-I$PREFIX/include" \
+    --extra-ldflags="-L$PREFIX/lib -static" \
+    --extra-libs="-lstdc++ -lm" \
+    --disable-everything \
+    --disable-autodetect \
+    --disable-network \
+    --disable-doc \
+    --disable-debug \
+    --disable-avdevice \
+    --disable-ffplay \
+    --disable-iamf \
+    --enable-protocol=file \
+    --enable-demuxer=mov,matroska,gif,image2,image_jpeg_pipe,image_jpegxl_pipe \
+    --enable-parser=h264,hevc,vp8,vp9,av1,mjpeg,gif,jpegxl \
+    "$@" > "$WORK/$name-configure.log" 2>&1 \
+    || { tail -40 "$WORK/$name-configure.log" >&2; exit 1; }
+  make -j"$JOBS" >/dev/null
+}
+
+ffmpeg_build ffmpeg --enable-ffmpeg --disable-ffprobe \
   --enable-decoder=h264,hevc,vp8,vp9,mpeg4,mjpeg,gif,libdav1d,libjxl \
-  --enable-parser=h264,hevc,vp8,vp9,av1,mjpeg,gif,jpegxl \
   --enable-encoder=mjpeg,libwebp,libwebp_anim \
   --enable-muxer=image2,webp \
   --enable-filter=scale \
-  --enable-libwebp --enable-libdav1d --enable-libjxl > "$WORK/ffmpeg-configure.log" 2>&1 \
-  || { tail -40 "$WORK/ffmpeg-configure.log" >&2; exit 1; }
-make -j"$JOBS" >/dev/null
+  --enable-libwebp --enable-libdav1d --enable-libjxl
+ffmpeg_build ffprobe --disable-ffmpeg --enable-ffprobe \
+  --disable-avfilter --disable-swscale --disable-swresample
 
 PKG="ffmpeg-$FFMPEG_VERSION-mb$MB_REV-$TARGET"
 STAGE="$WORK/$PKG"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/licenses"
-cp "ffmpeg$EXE" "ffprobe$EXE" "$STAGE/bin/"
+cp "$WORK/ffmpeg-build/ffmpeg$EXE" "$WORK/ffprobe-build/ffprobe$EXE" "$STAGE/bin/"
 "${CROSS}strip" "$STAGE/bin/ffmpeg$EXE" "$STAGE/bin/ffprobe$EXE"
-cp LICENSE.md COPYING.LGPLv2.1 "$STAGE/licenses/"
+cp "$WORK/ffmpeg-$FFMPEG_VERSION/LICENSE.md" "$WORK/ffmpeg-$FFMPEG_VERSION/COPYING.LGPLv2.1" "$STAGE/licenses/"
 cp "$WORK/libwebp-$LIBWEBP_VERSION/COPYING" "$STAGE/licenses/COPYING.libwebp"
 cp "$WORK/dav1d-$DAV1D_VERSION/COPYING" "$STAGE/licenses/COPYING.dav1d"
 cp "$WORK/libjxl-$LIBJXL_VERSION/LICENSE" "$STAGE/licenses/COPYING.libjxl"

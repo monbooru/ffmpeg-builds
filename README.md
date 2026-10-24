@@ -20,6 +20,10 @@ Everything else is disabled. In particular these binaries cannot
 encode video, cannot touch the network, and will refuse codecs outside
 the list above.
 
+ffprobe is built on its own with the demuxers, parsers and file
+protocol only: it reads sizes, durations, rotation and stream types
+from the container and decodes nothing.
+
 ## Targets and artifacts
 
 | Target | Toolchain | Archive |
